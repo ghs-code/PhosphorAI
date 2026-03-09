@@ -1,0 +1,13 @@
+{
+  "severe_threshold": 10.0,
+  "kept_features": [
+    "feed_dobi",
+    "feed_ffa_pct",
+    "feed_mi_pct",
+    "feed_iv",
+    "feed_car_pv"
+  ],
+  "removed_features": [],
+  "removal_history": [],
+  "moderate_risk_features_after_filter": []
+}
