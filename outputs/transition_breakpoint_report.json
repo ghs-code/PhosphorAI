@@ -1,0 +1,88 @@
+{
+  "jump_detected_any": true,
+  "jump_years": [
+    2025
+  ],
+  "years": {
+    "2025": {
+      "months_present": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10,
+        11,
+        12
+      ],
+      "has_aug": true,
+      "has_sep": false,
+      "has_oct": true,
+      "has_missing_sep": true,
+      "pre_window_rows": 25,
+      "post_window_rows": 10,
+      "feature_tests": {
+        "feed_dobi": {
+          "pre_n": 25,
+          "post_n": 10,
+          "pre_mean": 2.2681999999999998,
+          "post_mean": 2.2199999999999998,
+          "mean_diff_post_minus_pre": -0.04820000000000002,
+          "relative_change": 0.021250330649303276,
+          "effect_size_like": 0.9403388520506992,
+          "ttest_pvalue": 0.012176782881120242,
+          "jump_flag": false
+        },
+        "feed_ffa_pct": {
+          "pre_n": 25,
+          "post_n": 10,
+          "pre_mean": 4.118133333333334,
+          "post_mean": 4.195499999999999,
+          "mean_diff_post_minus_pre": 0.07736666666666547,
+          "relative_change": 0.01878682897944343,
+          "effect_size_like": 0.4944027906312646,
+          "ttest_pvalue": 0.15468561212299015,
+          "jump_flag": false
+        },
+        "feed_mi_pct": {
+          "pre_n": 25,
+          "post_n": 10,
+          "pre_mean": 0.2244,
+          "post_mean": 0.21949999999999997,
+          "mean_diff_post_minus_pre": -0.0049000000000000155,
+          "relative_change": 0.021836007032816438,
+          "effect_size_like": 0.3484367869922165,
+          "ttest_pvalue": 0.32469265468489694,
+          "jump_flag": false
+        },
+        "feed_iv": {
+          "pre_n": 25,
+          "post_n": 10,
+          "pre_mean": 52.52533333333333,
+          "post_mean": 52.8085,
+          "mean_diff_post_minus_pre": 0.28316666666667345,
+          "relative_change": 0.0053910493982830335,
+          "effect_size_like": 2.49503012484278,
+          "ttest_pvalue": 9.727717228442556e-06,
+          "jump_flag": false
+        },
+        "rbd_p_ppm": {
+          "pre_n": 25,
+          "post_n": 10,
+          "pre_mean": 2.068,
+          "post_mean": 2.85,
+          "mean_diff_post_minus_pre": 0.782,
+          "relative_change": 0.3781431332794279,
+          "effect_size_like": 1.1248853486630983,
+          "ttest_pvalue": 0.026513376519903268,
+          "jump_flag": true
+        }
+      },
+      "jump_detected": true,
+      "apply_transition_dummy": true
+    }
+  }
+}
