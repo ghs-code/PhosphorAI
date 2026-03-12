@@ -6,7 +6,7 @@ Dep. Variable:   ,feed_p_ppm      ,  R-squared:         ,   0.511
 Model:           ,OLS             ,  Adj. R-squared:    ,   0.489
 Method:          ,Least Squares   ,  F-statistic:       ,   23.87
 Date:            ,Thu, 12 Mar 2026,  Prob (F-statistic):,9.89e-42
-Time:            ,16:12:34        ,  Log-Likelihood:    , -858.28
+Time:            ,18:18:52        ,  Log-Likelihood:    , -858.28
 No. Observations:,   335          ,  AIC:               ,   1747.
 Df Residuals:    ,   320          ,  BIC:               ,   1804.
 Df Model:        ,    14          ,                     ,        

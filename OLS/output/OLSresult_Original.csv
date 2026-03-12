@@ -1,0 +1,29 @@
+"Original Variables: feed_ffa_pct, feed_mi_pct, feed_iv, feed_dobi, feed_car_pv"
+"Adjusted R-squared: 0.1134"
+
+                      OLS Regression Results                     
+Dep. Variable:   ,feed_p_ppm      ,  R-squared:         ,   0.127
+Model:           ,OLS             ,  Adj. R-squared:    ,   0.113
+Method:          ,Least Squares   ,  F-statistic:       ,   9.540
+Date:            ,Thu, 12 Mar 2026,  Prob (F-statistic):,1.64e-08
+Time:            ,18:18:52        ,  Log-Likelihood:    , -955.39
+No. Observations:,   335          ,  AIC:               ,   1923.
+Df Residuals:    ,   329          ,  BIC:               ,   1946.
+Df Model:        ,     5          ,                     ,        
+Covariance Type: ,nonrobust       ,                     ,        
+            ,   coef   , std err ,    t    ,P>|t| ,  [0.025 ,  0.975] 
+const       ,   -0.3641,   49.439,   -0.007, 0.994,  -97.620,   96.892
+feed_ffa_pct,    3.9417,    0.603,    6.534, 0.000,    2.755,    5.129
+feed_mi_pct ,   -3.7876,   25.685,   -0.147, 0.883,  -54.316,   46.740
+feed_iv     ,    0.2957,    0.957,    0.309, 0.758,   -1.587,    2.178
+feed_dobi   ,   -1.2344,    4.989,   -0.247, 0.805,  -11.049,    8.580
+feed_car_pv ,   -0.0012,    0.020,   -0.060, 0.952,   -0.040,    0.038
+Omnibus:      , 4.881,  Durbin-Watson:     ,   0.613
+Prob(Omnibus):, 0.087,  Jarque-Bera (JB):  ,   4.893
+Skew:         , 0.295,  Prob(JB):          ,  0.0866
+Kurtosis:     , 2.956,  Cond. No.          ,9.89e+04
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[2] The condition number is large, 9.89e+04. This might indicate that there are
+strong multicollinearity or other numerical problems.
