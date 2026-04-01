@@ -4,8 +4,19 @@
 # Python bytecode cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
 
 # Virtual environments
 .venv/
 venv/
 env/
+
+# Local configuration
+.env
+.env.local
+
+# Local-only confidential inputs
+local_data/
+local_reports/

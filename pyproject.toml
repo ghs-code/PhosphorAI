@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cpo-phosphorus"
+version = "0.1.0"
+description = "Preprocessing and modeling pipelines for CPO phosphorus prediction."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "openpyxl",
+  "pandas",
+  "scikit-learn",
+  "scipy",
+  "statsmodels",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
