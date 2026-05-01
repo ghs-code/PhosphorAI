@@ -8,7 +8,10 @@ PIP ?= $(PYTHON) -m pip
 
 CPO_LOCAL_RAW_DIR ?= local_data/raw
 CPO_RAW_INPUT ?= local_data/raw/Copy of R3 QUALITY 2025.xlsx
+CPO_YEAR ?= all
 CPO_PROCESSED_DIR ?= local_data/processed
+CPO_MODEL_SOURCE ?= $(CPO_PROCESSED_DIR)/model_source.csv
+CPO_MODEL_READY ?= $(CPO_PROCESSED_DIR)/model_ready.csv
 CPO_REPORTS_DIR ?= local_reports
 CPO_PREPROCESSING_REPORT_DIR ?= local_reports/preprocessing
 CPO_OLS_REPORT_DIR ?= local_reports/ols
@@ -16,7 +19,7 @@ CPO_RF_REPORTS_DIR ?= local_reports/random_forest
 CPO_RF_FULL_REPORT_DIR ?= local_reports/random_forest/full_feature
 CPO_RF_CORE_REPORT_DIR ?= local_reports/random_forest/core_feature
 CPO_RF_COMBO_REPORT_DIR ?= local_reports/random_forest/combo_search
-CPO_TARGET_COL ?= rbd_p_ppm
+CPO_TARGET_COL ?= feed_p_ppm
 CPO_VIF_THRESHOLD ?= 10
 
 .PHONY: help init-config mkdirs install preprocess ols acf rf-full rf-core rf-combo models all
@@ -52,6 +55,7 @@ install:
 preprocess: mkdirs
 	$(PYTHON) scripts/run_preprocessing.py \
 		--input "$(CPO_RAW_INPUT)" \
+		--year "$(CPO_YEAR)" \
 		--processed-dir "$(CPO_PROCESSED_DIR)" \
 		--report-dir "$(CPO_PREPROCESSING_REPORT_DIR)" \
 		--target-col "$(CPO_TARGET_COL)" \
@@ -59,29 +63,34 @@ preprocess: mkdirs
 
 ols: mkdirs
 	$(PYTHON) scripts/run_ols.py \
-		--input "$(CPO_PROCESSED_DIR)/model_ready.csv" \
+		--input "$(CPO_MODEL_READY)" \
 		--processed-dir "$(CPO_PROCESSED_DIR)" \
-		--report-dir "$(CPO_OLS_REPORT_DIR)"
+		--report-dir "$(CPO_OLS_REPORT_DIR)" \
+		--target-col "$(CPO_TARGET_COL)"
 
 acf: mkdirs
 	$(PYTHON) scripts/run_acf_plot.py \
 		--input "$(CPO_PROCESSED_DIR)/model_ready_lag.csv" \
-		--output "$(CPO_OLS_REPORT_DIR)/acf_plot.jpg"
+		--output "$(CPO_OLS_REPORT_DIR)/acf_plot.jpg" \
+		--target-col "$(CPO_TARGET_COL)"
 
 rf-full: mkdirs
 	$(PYTHON) scripts/run_rf_full.py \
-		--input "$(CPO_PROCESSED_DIR)/model_ready.csv" \
-		--output-dir "$(CPO_RF_FULL_REPORT_DIR)"
+		--input "$(CPO_MODEL_SOURCE)" \
+		--output-dir "$(CPO_RF_FULL_REPORT_DIR)" \
+		--target-col "$(CPO_TARGET_COL)"
 
 rf-core: mkdirs
 	$(PYTHON) scripts/run_rf_core.py \
-		--input "$(CPO_PROCESSED_DIR)/model_ready.csv" \
-		--output-dir "$(CPO_RF_CORE_REPORT_DIR)"
+		--input "$(CPO_MODEL_SOURCE)" \
+		--output-dir "$(CPO_RF_CORE_REPORT_DIR)" \
+		--target-col "$(CPO_TARGET_COL)"
 
 rf-combo: mkdirs
 	$(PYTHON) scripts/run_rf_combo_search.py \
-		--input "$(CPO_PROCESSED_DIR)/model_ready.csv" \
-		--output-dir "$(CPO_RF_COMBO_REPORT_DIR)"
+		--input "$(CPO_MODEL_SOURCE)" \
+		--output-dir "$(CPO_RF_COMBO_REPORT_DIR)" \
+		--target-col "$(CPO_TARGET_COL)"
 
 models: ols acf rf-full rf-core rf-combo
 
