@@ -401,13 +401,15 @@ def iqr_clip_by_month(df, columns, k=1.5):
     return data, outlier_counts
 
 
-def handle_missing_values(df):
+def handle_missing_values(df, exclude_numeric_columns=None):
     data = df.copy().sort_values("date").reset_index(drop=True)
+    exclude_numeric_columns = set(exclude_numeric_columns or [])
+    numeric_columns = [col for col in NUMERIC_COLUMNS if col not in exclude_numeric_columns]
 
-    data[NUMERIC_COLUMNS] = data[NUMERIC_COLUMNS].interpolate(
+    data[numeric_columns] = data[numeric_columns].interpolate(
         method="linear", limit_direction="both"
     )
-    for col in NUMERIC_COLUMNS:
+    for col in numeric_columns:
         data[col] = data[col].fillna(data[col].median())
 
     for col in CATEGORICAL_COLUMNS:
@@ -690,8 +692,9 @@ def run_pipeline(input_paths, processed_dir, report_dir, target_col, vif_thresho
         p_threshold=0.01,
     )
     with_time = add_time_features(typed, transition_report)
-    clipped, outlier_counts = iqr_clip_by_month(with_time, IQR_COLUMNS, k=1.5)
-    imputed = handle_missing_values(clipped)
+    iqr_columns = [col for col in IQR_COLUMNS if col != target_col]
+    clipped, outlier_counts = iqr_clip_by_month(with_time, iqr_columns, k=1.5)
+    imputed = handle_missing_values(clipped, exclude_numeric_columns=[target_col])
     featured = add_log_features(imputed)
 
     normality_df = build_normality_report(featured, CORR_COLUMNS)

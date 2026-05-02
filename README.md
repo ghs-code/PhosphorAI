@@ -232,6 +232,13 @@ make acf
 make rf-full
 make rf-core
 make rf-combo
+make feed-opt
+```
+
+运行最终固定口径实验，输出到 `local_runs/final_feed_2024_2025/`：
+
+```bash
+make final-feed
 ```
 
 如果需要分步执行同一次实验，请手动固定 `CPO_RUN_ID`，保证各步骤读写同一目录：
@@ -295,10 +302,21 @@ OLS：
 - `local_reports/random_forest/core_feature/`
 - `local_reports/random_forest/combo_search/`
 
+优化后的 feed oil 预测与风险预警：
+
+- `local_runs/<run_id>/reports/feed_model_optimized/feed_model_optimized_baselines.csv`
+- `local_runs/<run_id>/reports/feed_model_optimized/feed_model_optimized_comparison.csv`
+- `local_runs/<run_id>/reports/feed_model_optimized/feed_model_optimized_year_validation_all_configs.csv`
+- `local_runs/<run_id>/reports/feed_model_optimized/feed_model_optimized_risk_metrics.csv`
+- `local_runs/<run_id>/reports/feed_model_optimized/feed_model_optimized_run_summary.md`
+- `local_runs/<run_id>/reports/feed_model_optimized/feed_model_optimized_summary.json`
+
 ## 说明
 
-- 当前建模脚本默认预测 `feed_p_ppm`；`CPO_TARGET_COL` 会同时传给预处理、OLS、ACF 和随机森林脚本，用于在 `feed_p_ppm` 与 `rbd_p_ppm` 等目标之间切换。
+- 当前最终 feed oil 优化模型固定预测 `feed_p_ppm`，并明确排除 RBD、acid dosing、bleaching earth dosing 和目标衍生泄漏变量；历史 OLS/RF 脚本仍可通过 `CPO_TARGET_COL` 临时切换目标。
+- `feed-opt` 会同时输出 ppm 回归指标和高磷风险预警指标。企业阈值未提供时，风险预警默认用 `feed_p_ppm` 的 75/80/90 分位数作为 prototype cutoff。
 - 切换目标后请从 `make preprocess` 开始重跑，确保 `model_ready.csv` 的目标列、目标滞后列和 transition 检测保持一致。
 - 切换年份范围后也请从 `make preprocess` 开始重跑；`CPO_RAW_INPUT=local_data/raw CPO_YEAR=all` 会合并目录下所有 Excel 文件，`CPO_YEAR=2024` 只保留数据日期为 2024 年的记录。
 - OLS 脚本会自动跳过数据中不存在或恒定不变的固定变量，避免在缺失 9 月数据时引入无效的 `month_9` 哑变量。
+- 最终业务定位是 ppm prediction + high-risk alert prototype；当前工作流不会输出自动 dosing optimization 建议。
 - 若 `local_data/` 或 `local_reports/` 中的文件也不希望出现在本机其他备份链路中，应再结合你本地的磁盘加密、同步和备份策略一并处理。
