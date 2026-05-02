@@ -107,11 +107,78 @@ CORR_COLUMNS = [
 
 VIF_COLUMNS = ["feed_dobi", "feed_ffa_pct", "feed_mi_pct", "feed_iv", "feed_car_pv"]
 
-TRANSITION_CHECK_COLUMNS = ["feed_dobi", "feed_ffa_pct", "feed_mi_pct", "feed_iv", "rbd_p_ppm"]
+TRANSITION_BASE_COLUMNS = ["feed_dobi", "feed_ffa_pct", "feed_mi_pct", "feed_iv"]
 
 BOXPLOT_COLUMNS = ["feed_dobi", "feed_ffa_pct", "feed_mi_pct", "feed_iv", "feed_p_ppm", "rbd_p_ppm"]
 
 STOP_TOKENS = {"STOP", "PLANT STOPPED"}
+EXCEL_SUFFIXES = {".xlsx", ".xlsm", ".xls"}
+
+
+def _split_env_list(value):
+    if not value:
+        return []
+    parts = []
+    for chunk in value.split(os.pathsep):
+        chunk = chunk.strip()
+        if chunk:
+            parts.append(chunk)
+    return parts
+
+
+def _parse_year_filter(value):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text or text.lower() in {"all", "*"}:
+        return None
+
+    years = set()
+    for part in text.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        years.add(int(part))
+
+    return years or None
+
+
+def _discover_excel_files(input_path):
+    path = Path(input_path).expanduser()
+    if path.is_dir():
+        files = [
+            p
+            for p in sorted(path.iterdir())
+            if p.is_file()
+            and p.suffix.lower() in EXCEL_SUFFIXES
+            and not p.name.startswith("~$")
+        ]
+        if not files:
+            raise FileNotFoundError(f"No Excel files found in directory: {path}")
+        return files
+
+    if not path.exists():
+        raise FileNotFoundError(f"Raw input path does not exist: {path}")
+    if path.suffix.lower() not in EXCEL_SUFFIXES:
+        raise ValueError(f"Raw input is not an Excel file: {path}")
+    return [path]
+
+
+def resolve_raw_input_paths(input_paths):
+    resolved = []
+    seen = set()
+    for input_path in input_paths:
+        for path in _discover_excel_files(input_path):
+            key = path.resolve()
+            if key not in seen:
+                seen.add(key)
+                resolved.append(path)
+
+    if not resolved:
+        raise ValueError("At least one raw Excel input is required.")
+
+    return resolved
 
 
 def load_raw_excel(input_path):
@@ -122,12 +189,37 @@ def load_raw_excel(input_path):
         block = raw.iloc[4:, 1:21].copy()
         block.columns = RAW_COLUMNS
         block["sheet_name"] = sheet
+        block["source_file"] = Path(input_path).name
         frames.append(block)
 
     df = pd.concat(frames, ignore_index=True)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df[df["date"].notna()].sort_values("date").reset_index(drop=True)
     return df
+
+
+def load_raw_inputs(input_paths, year_filter=None):
+    paths = resolve_raw_input_paths(input_paths)
+    frames = [load_raw_excel(path) for path in paths]
+    df = pd.concat(frames, ignore_index=True)
+    rows_loaded = int(len(df))
+
+    years = _parse_year_filter(year_filter)
+    if years is not None:
+        df = df[df["date"].dt.year.isin(years)].copy()
+        if df.empty:
+            requested = ", ".join(str(year) for year in sorted(years))
+            raise ValueError(f"No rows found for requested year(s): {requested}")
+
+    df = df.sort_values("date").reset_index(drop=True)
+    metadata = {
+        "source_files": [str(path) for path in paths],
+        "requested_years": "all" if years is None else sorted(years),
+        "years_present": sorted(df["date"].dt.year.unique().astype(int).tolist()),
+        "rows_loaded_before_year_filter": rows_loaded,
+        "rows_after_year_filter": int(len(df)),
+    }
+    return df, metadata
 
 
 def normalize_and_cast(df):
@@ -422,13 +514,15 @@ def build_model_ready(df, target_col, retained_vif_features):
         "time_trend",
         "missing_transition_phase",
     ]
+    target_derived_features = {target_col, "log_" + target_col}
+    base_features = [c for c in base_features if c not in target_derived_features]
 
     retained_set = set(retained_vif_features)
     base_features = [c for c in base_features if c not in VIF_COLUMNS or c in retained_set]
 
     month_features = [c for c in data.columns if c.startswith("month_") and c != "month_1"]
     encoded_cat = _encode_categorical_ohe(data, ["feed_tank", "feed_type"])
-    keep_cols = ["date", target_col] + base_features + month_features
+    keep_cols = list(dict.fromkeys(["date", target_col] + base_features + month_features))
     model = pd.concat([data[keep_cols], encoded_cat], axis=1)
     return model
 
@@ -547,6 +641,7 @@ def build_summary(
     vif_before_df,
     vif_after_df,
     vif_selection,
+    input_metadata,
 ):
     missing_before = before_df.isna().sum().to_dict()
     missing_after = after_df.isna().sum().to_dict()
@@ -555,6 +650,7 @@ def build_summary(
     summary = {
         "rows_before": int(len(before_df)),
         "rows_after": int(len(after_df)),
+        "input_metadata": input_metadata,
         "date_min": str(after_df["date"].min().date()),
         "date_max": str(after_df["date"].max().date()),
         "months_present": sorted(after_df["month"].unique().tolist()),
@@ -576,18 +672,19 @@ def build_summary(
     return summary
 
 
-def run_pipeline(input_path, processed_dir, report_dir, target_col, vif_threshold):
+def run_pipeline(input_paths, processed_dir, report_dir, target_col, vif_threshold, year_filter):
     processed_output = Path(processed_dir)
     report_output = Path(report_dir)
     processed_output.mkdir(parents=True, exist_ok=True)
     report_output.mkdir(parents=True, exist_ok=True)
 
-    raw = load_raw_excel(input_path)
+    raw, input_metadata = load_raw_inputs(input_paths, year_filter=year_filter)
     typed = normalize_and_cast(raw)
 
+    transition_check_columns = list(dict.fromkeys(TRANSITION_BASE_COLUMNS + [target_col]))
     transition_report = detect_transition_breakpoint_by_year(
         typed,
-        TRANSITION_CHECK_COLUMNS,
+        transition_check_columns,
         effect_threshold=1.0,
         rel_change_threshold=0.2,
         p_threshold=0.01,
@@ -611,6 +708,8 @@ def run_pipeline(input_path, processed_dir, report_dir, target_col, vif_threshol
         featured, target_col=target_col, retained_vif_features=vif_selection["kept_features"]
     )
     model_ready = model_ready[model_ready[target_col].notna()].reset_index(drop=True)
+    model_source_cols = RAW_COLUMNS + ["source_file"]
+    model_source = typed[[col for col in model_source_cols if col in typed.columns]].copy()
 
     descriptive_df = build_descriptive_stats(
         featured, NUMERIC_COLUMNS + ["log_feed_ffa_pct", "log_feed_p_ppm", "log_rbd_p_ppm"]
@@ -627,9 +726,11 @@ def run_pipeline(input_path, processed_dir, report_dir, target_col, vif_threshol
         vif_before_df=vif_before,
         vif_after_df=vif_after,
         vif_selection=vif_selection,
+        input_metadata=input_metadata,
     )
 
     featured.to_csv(processed_output / "processed_full.csv", index=False)
+    model_source.to_csv(processed_output / "model_source.csv", index=False)
     model_ready.to_csv(processed_output / "model_ready.csv", index=False)
     descriptive_df.to_csv(report_output / "descriptive_stats.csv", index=False)
     monthly_boxplot_df.to_csv(report_output / "monthly_boxplot_stats.csv", index=False)
@@ -651,14 +752,33 @@ def run_pipeline(input_path, processed_dir, report_dir, target_col, vif_threshol
 
 
 def parse_args():
-    default_target_col = os.getenv("CPO_TARGET_COL", "rbd_p_ppm")
+    default_target_col = os.getenv("CPO_TARGET_COL", "feed_p_ppm")
     default_vif_threshold = _get_env_float("CPO_VIF_THRESHOLD", 10.0)
+    default_raw_inputs = _split_env_list(os.getenv("CPO_RAW_INPUTS"))
+    if not default_raw_inputs:
+        default_raw_input = os.getenv("CPO_RAW_INPUT")
+        default_raw_inputs = [default_raw_input] if default_raw_input else [str(DEFAULT_RAW_EXCEL)]
+    default_year = os.getenv("CPO_YEAR", "all")
 
     parser = argparse.ArgumentParser(description="Wilmar capstone preprocessing and EDA pipeline")
     parser.add_argument(
         "--input",
-        default=str(DEFAULT_RAW_EXCEL),
-        help=f"Path to raw Excel file (default: {DEFAULT_RAW_EXCEL})",
+        action="append",
+        default=None,
+        help=(
+            "Path to a raw Excel file or a directory containing raw Excel files. "
+            "Can be passed multiple times. "
+            f"Default: {default_raw_inputs}"
+        ),
+    )
+    parser.add_argument(
+        "--year",
+        default=default_year,
+        help=(
+            "Year filter by data date. Use 'all', a single year like '2025', "
+            "or comma-separated years like '2024,2025'. "
+            f"Default: {default_year}"
+        ),
     )
     parser.add_argument(
         "--processed-dir",
@@ -681,17 +801,21 @@ def parse_args():
         default=default_vif_threshold,
         help=f"Severe VIF threshold for iterative feature removal (default: {default_vif_threshold})",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.input is None:
+        args.input = default_raw_inputs
+    return args
 
 
 def main():
     args = parse_args()
     summary = run_pipeline(
-        input_path=args.input,
+        input_paths=args.input,
         processed_dir=args.processed_dir,
         report_dir=args.report_dir,
         target_col=args.target_col,
         vif_threshold=args.vif_threshold,
+        year_filter=args.year,
     )
     print(json.dumps({"summary": summary}, ensure_ascii=False, indent=2))
 

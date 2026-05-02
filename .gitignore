@@ -21,3 +21,4 @@ env/
 # Local-only confidential inputs
 local_data/
 local_reports/
+local_runs/

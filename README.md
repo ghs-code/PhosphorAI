@@ -21,7 +21,11 @@ IND5005B-AI-Driven-Phosphorus-Content-Prediction-and-Optimization-in-CPO-Refinin
 │       └── README.md
 ├── local_data/
 │   ├── raw/                     # gitignored，本地保密原始输入
-│   └── processed/               # gitignored，本地保密中间数据
+│   └── processed/               # gitignored，旧版固定输出目录
+├── local_runs/
+│   └── YYYYmmdd_HHMMSS/         # gitignored，默认每次运行的独立输出目录
+│       ├── processed/
+│       └── reports/
 ├── reports/
 │   ├── README.md
 │   ├── preprocessing/
@@ -69,8 +73,10 @@ IND5005B-AI-Driven-Phosphorus-Content-Prediction-and-Optimization-in-CPO-Refinin
 - `src/`：核心源码。
 - `scripts/`：运行入口。
 - `local_data/raw/`：本地保密原始输入。
-- `local_data/processed/`：本地保密中间数据。
-- `local_reports/`：本地保密分析报告与模型产物。
+- `local_runs/<run_id>/processed/`：默认每次运行生成的本地保密中间数据。
+- `local_runs/<run_id>/reports/`：默认每次运行生成的本地保密分析报告与模型产物。
+- `local_data/processed/`：旧版固定中间数据目录，仅在关闭归档模式时使用。
+- `local_reports/`：旧版固定报告目录，仅在关闭归档模式时使用。
 - `data/raw/`：仓库内原始数据占位说明，不存放真实文件。
 - `data/processed/`：仓库内中间数据占位说明，不存放真实文件。
 - `reports/`：仓库内报告目录占位说明，不存放真实文件。
@@ -99,14 +105,20 @@ cp .env.example .env
 常用配置项包括：
 
 - `PYTHON`：执行 Python 命令时使用的解释器，默认 `python3`
-- `CPO_RAW_INPUT`：本地保密原始文件路径
-- `CPO_PROCESSED_DIR`：本地保密中间数据目录
+- `CPO_RAW_INPUT`：本地保密原始文件路径，也可以设置为包含多年份 Excel 的目录
+- `CPO_YEAR`：按数据日期选择年份，默认 `all`；可设为 `2024`、`2025` 或 `2024,2025`
+- `CPO_ARCHIVE_RUNS`：是否启用每次运行独立归档目录，默认 `1`
+- `CPO_RUN_ID`：运行编号，默认按当前时间生成到微秒，如 `20260501_143000_123456`
+- `CPO_RUN_ROOT`：当前运行的根目录，默认 `local_runs/<CPO_RUN_ID>`
+- `CPO_PROCESSED_DIR`：本地保密中间数据目录；归档模式下自动解析为 `local_runs/<CPO_RUN_ID>/processed`
+- `CPO_MODEL_SOURCE`：随机森林模型使用的原始特征源文件；归档模式下自动解析为当前 run 的 `processed/model_source.csv`
+- `CPO_MODEL_READY`：OLS 和历史报告流程使用的全量预处理建模文件；归档模式下自动解析为当前 run 的 `processed/model_ready.csv`
 - `CPO_PREPROCESSING_REPORT_DIR`：预处理报告目录
 - `CPO_OLS_REPORT_DIR`：OLS 报告目录
 - `CPO_RF_FULL_REPORT_DIR`：全量特征随机森林报告目录
 - `CPO_RF_CORE_REPORT_DIR`：核心变量随机森林报告目录
 - `CPO_RF_COMBO_REPORT_DIR`：变量组合搜索报告目录
-- `CPO_TARGET_COL`：预处理输出中保留的目标列
+- `CPO_TARGET_COL`：当前预测目标列，默认 `feed_p_ppm`；如需预测 `rbd_p_ppm`，可在 `.env` 中切换或运行 `make all CPO_TARGET_COL=rbd_p_ppm`
 - `CPO_VIF_THRESHOLD`：VIF 严重共线性阈值
 
 代码默认会读取这些环境变量；如果未设置，则使用仓库中约定的本地默认路径。
@@ -119,19 +131,28 @@ cp .env.example .env
 local_data/raw/Copy of R3 QUALITY 2025.xlsx
 ```
 
-预处理后的中间数据默认输出到：
+如果有多年份文件，可以都放在 `local_data/raw/` 下，例如：
 
 ```text
-local_data/processed/
+local_data/raw/R3 QUALITY 2024.xlsx
+local_data/raw/Copy of R3 QUALITY 2025.xlsx
 ```
+
+预处理后的中间数据默认输出到每次运行独立目录：
+
+```text
+local_runs/<run_id>/processed/
+```
+
+其中 `model_source.csv` 只包含标准化后的原始字段，不做全量补值、IQR 裁剪、one-hot 或 log 特征；随机森林脚本会在 sklearn Pipeline 内对训练折拟合这些预处理步骤，避免验证/测试数据泄漏。`model_ready.csv` 保留给 OLS 和 EDA 报告使用。
 
 分析报告与模型结果默认输出到：
 
 ```text
-local_reports/
+local_runs/<run_id>/reports/
 ```
 
-如有需要，也可以在运行命令中通过参数覆盖这些默认路径。
+这样重复运行 `make all` 不会覆盖旧结果。如需恢复旧版固定输出目录，可运行 `make all CPO_ARCHIVE_RUNS=0`，此时会使用 `.env` 中的 `local_data/processed/` 和 `local_reports/` 等路径，并覆盖同名文件。
 
 ## Make 工作流
 
@@ -141,6 +162,12 @@ local_reports/
 
 ```bash
 make help
+```
+
+查看本次运行将使用的输入和输出目录：
+
+```bash
+make print-config
 ```
 
 初始化本地配置：
@@ -167,10 +194,33 @@ make install
 make all
 ```
 
+默认会生成一个新的运行目录，例如：
+
+```text
+local_runs/20260501_143000_123456/
+├── processed/
+└── reports/
+```
+
+选择某一年或合并所有年份：
+
+```bash
+make all CPO_RAW_INPUT=local_data/raw CPO_YEAR=2024
+make all CPO_RAW_INPUT=local_data/raw CPO_YEAR=2025
+make all CPO_RAW_INPUT=local_data/raw CPO_YEAR=all
+```
+
 只运行建模部分：
 
 ```bash
 make models
+```
+
+临时切换预测目标，不需要修改代码：
+
+```bash
+make all CPO_TARGET_COL=rbd_p_ppm
+make models CPO_TARGET_COL=feed_p_ppm
 ```
 
 单独运行某一步：
@@ -182,6 +232,13 @@ make acf
 make rf-full
 make rf-core
 make rf-combo
+```
+
+如果需要分步执行同一次实验，请手动固定 `CPO_RUN_ID`，保证各步骤读写同一目录：
+
+```bash
+make preprocess CPO_RUN_ID=experiment_01
+make models CPO_RUN_ID=experiment_01
 ```
 
 ## 运行方式
@@ -196,10 +253,11 @@ python3 scripts/run_preprocessing.py
 
 ```bash
 python3 scripts/run_preprocessing.py \
-  --input "local_data/raw/Copy of R3 QUALITY 2025.xlsx" \
+  --input "local_data/raw" \
+  --year "2024,2025" \
   --processed-dir "local_data/processed" \
   --report-dir "local_reports/preprocessing" \
-  --target-col "rbd_p_ppm" \
+  --target-col "feed_p_ppm" \
   --vif-threshold 10
 ```
 
@@ -222,14 +280,14 @@ python3 scripts/run_rf_combo_search.py
 
 预处理：
 
-- `local_data/processed/processed_full.csv`
-- `local_data/processed/model_ready.csv`
-- `local_data/processed/model_ready_lag.csv`
-- `local_reports/preprocessing/`
+- `local_runs/<run_id>/processed/processed_full.csv`
+- `local_runs/<run_id>/processed/model_ready.csv`
+- `local_runs/<run_id>/processed/model_ready_lag.csv`
+- `local_runs/<run_id>/reports/preprocessing/`
 
 OLS：
 
-- `local_reports/ols/`
+- `local_runs/<run_id>/reports/ols/`
 
 随机森林：
 
@@ -239,6 +297,8 @@ OLS：
 
 ## 说明
 
-- 当前建模脚本默认预测 `feed_p_ppm`；预处理后数据中仍保留 `rbd_p_ppm`，以便后续比较或扩展。
+- 当前建模脚本默认预测 `feed_p_ppm`；`CPO_TARGET_COL` 会同时传给预处理、OLS、ACF 和随机森林脚本，用于在 `feed_p_ppm` 与 `rbd_p_ppm` 等目标之间切换。
+- 切换目标后请从 `make preprocess` 开始重跑，确保 `model_ready.csv` 的目标列、目标滞后列和 transition 检测保持一致。
+- 切换年份范围后也请从 `make preprocess` 开始重跑；`CPO_RAW_INPUT=local_data/raw CPO_YEAR=all` 会合并目录下所有 Excel 文件，`CPO_YEAR=2024` 只保留数据日期为 2024 年的记录。
 - OLS 脚本会自动跳过数据中不存在或恒定不变的固定变量，避免在缺失 9 月数据时引入无效的 `month_9` 哑变量。
 - 若 `local_data/` 或 `local_reports/` 中的文件也不希望出现在本机其他备份链路中，应再结合你本地的磁盘加密、同步和备份策略一并处理。
