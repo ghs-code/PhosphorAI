@@ -19,6 +19,8 @@ CPO_RF_REPORTS_DIR ?= local_reports/random_forest
 CPO_RF_FULL_REPORT_DIR ?= local_reports/random_forest/full_feature
 CPO_RF_CORE_REPORT_DIR ?= local_reports/random_forest/core_feature
 CPO_RF_COMBO_REPORT_DIR ?= local_reports/random_forest/combo_search
+CPO_FEED_OPT_REPORT_DIR ?= local_reports/feed_model_optimized
+CPO_YEARLY_RUN_PREFIX ?= optimized_feed
 CPO_TARGET_COL ?= feed_p_ppm
 CPO_VIF_THRESHOLD ?= 10
 CPO_ARCHIVE_RUNS ?= 1
@@ -39,9 +41,10 @@ CPO_RF_REPORTS_DIR := $(CPO_REPORTS_DIR)/random_forest
 CPO_RF_FULL_REPORT_DIR := $(CPO_RF_REPORTS_DIR)/full_feature
 CPO_RF_CORE_REPORT_DIR := $(CPO_RF_REPORTS_DIR)/core_feature
 CPO_RF_COMBO_REPORT_DIR := $(CPO_RF_REPORTS_DIR)/combo_search
+CPO_FEED_OPT_REPORT_DIR := $(CPO_REPORTS_DIR)/feed_model_optimized
 endif
 
-.PHONY: help init-config mkdirs install preprocess ols acf rf-full rf-core rf-combo models all
+.PHONY: help init-config mkdirs install preprocess ols acf rf-full rf-core rf-combo feed-opt feed-opt-yearly final-feed models all
 
 help:
 	@echo "Available targets:"
@@ -55,6 +58,9 @@ help:
 	@echo "  make rf-full       # run full-feature random forest"
 	@echo "  make rf-core       # run core-feature random forest"
 	@echo "  make rf-combo      # run random forest combo search"
+	@echo "  make feed-opt      # run optimized feed-oil model comparison"
+	@echo "  make feed-opt-yearly # run optimized feed model separately for 2024 and 2025"
+	@echo "  make final-feed    # run fixed final 2024-2025 feed-oil experiment"
 	@echo "  make models        # run OLS + ACF + all RF workflows"
 	@echo "  make all           # run preprocessing and all model workflows"
 	@echo ""
@@ -81,12 +87,14 @@ print-config:
 	@echo "CPO_RF_FULL_REPORT_DIR=$(CPO_RF_FULL_REPORT_DIR)"
 	@echo "CPO_RF_CORE_REPORT_DIR=$(CPO_RF_CORE_REPORT_DIR)"
 	@echo "CPO_RF_COMBO_REPORT_DIR=$(CPO_RF_COMBO_REPORT_DIR)"
+	@echo "CPO_FEED_OPT_REPORT_DIR=$(CPO_FEED_OPT_REPORT_DIR)"
+	@echo "CPO_YEARLY_RUN_PREFIX=$(CPO_YEARLY_RUN_PREFIX)"
 
 mkdirs:
 	@mkdir -p "$(CPO_LOCAL_RAW_DIR)" "$(CPO_PROCESSED_DIR)" \
 		"$(CPO_PREPROCESSING_REPORT_DIR)" "$(CPO_OLS_REPORT_DIR)" \
 		"$(CPO_RF_FULL_REPORT_DIR)" "$(CPO_RF_CORE_REPORT_DIR)" \
-		"$(CPO_RF_COMBO_REPORT_DIR)"
+		"$(CPO_RF_COMBO_REPORT_DIR)" "$(CPO_FEED_OPT_REPORT_DIR)"
 
 install:
 	$(PIP) install -U pip
@@ -132,6 +140,30 @@ rf-combo: mkdirs
 		--output-dir "$(CPO_RF_COMBO_REPORT_DIR)" \
 		--target-col "$(CPO_TARGET_COL)"
 
-models: ols acf rf-full rf-core rf-combo
+feed-opt: mkdirs
+	$(PYTHON) scripts/run_feed_model_optimized.py \
+		--input "$(CPO_MODEL_SOURCE)" \
+		--output-dir "$(CPO_FEED_OPT_REPORT_DIR)" \
+		--target-col "$(CPO_TARGET_COL)"
+
+feed-opt-yearly:
+	$(MAKE) preprocess feed-opt \
+		CPO_RUN_ID="$(CPO_YEARLY_RUN_PREFIX)_2024" \
+		CPO_RUN_ROOT="local_runs/$(CPO_YEARLY_RUN_PREFIX)_2024" \
+		CPO_YEAR=2024
+	$(MAKE) preprocess feed-opt \
+		CPO_RUN_ID="$(CPO_YEARLY_RUN_PREFIX)_2025" \
+		CPO_RUN_ROOT="local_runs/$(CPO_YEARLY_RUN_PREFIX)_2025" \
+		CPO_YEAR=2025
+
+final-feed:
+	$(MAKE) preprocess ols acf feed-opt \
+		CPO_RUN_ID="final_feed_2024_2025" \
+		CPO_RUN_ROOT="local_runs/final_feed_2024_2025" \
+		CPO_RAW_INPUT="$(CPO_LOCAL_RAW_DIR)" \
+		CPO_YEAR=2024,2025 \
+		CPO_TARGET_COL=feed_p_ppm
+
+models: ols acf rf-full rf-core rf-combo feed-opt
 
 all: preprocess models
